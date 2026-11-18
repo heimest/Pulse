@@ -1,0 +1,2 @@
+# TP 01 — Synthetic scanner fixture, not an AWS-issued credential.
+AWS_ACCESS_KEY_ID=AKIAQ7M4P2V6K3D5X7NZ
