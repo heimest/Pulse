@@ -7,6 +7,31 @@
 
 ---
 
+## Démarrage local — socle du TP 01 DevOps
+
+Prérequis : Node.js 24 et pnpm 12.11.2 (la version indiquée dans `package.json`).
+
+```bash
+pnpm install --frozen-lockfile
+pnpm verify
+pnpm --filter @pulse/monitor-service build
+pnpm --filter @pulse/monitor-service start
+```
+
+Dans un autre terminal, `curl -fsS http://localhost:3000/health` doit renvoyer
+`{"status":"ok"}`. `pnpm verify` exécute Vitest, ESLint et Prettier.
+
+Pour la même vérification avec Docker, depuis la racine du dépôt :
+
+```bash
+docker build -f apps/monitor-service/Dockerfile -t pulse-monitor:local .
+docker run --rm -p 127.0.0.1:3000:3000 pulse-monitor:local
+```
+
+Arrêter le service local avant de lancer Docker pour libérer le port 3000.
+Le workflow GitHub Actions, les rapports et Gitleaks restent à mettre en place
+pendant le TP. Ce socle ne nécessite ni registry ni cluster Kubernetes.
+
 ## 1. Présentation du projet
 
 ### 1.1 Contexte
