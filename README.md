@@ -7,6 +7,81 @@
 
 ---
 
+## Démarrage local — socle du TP 01 DevOps
+
+Prérequis : Node.js 24 et pnpm 12.11.2 (la version indiquée dans `package.json`).
+
+```bash
+pnpm install --frozen-lockfile
+pnpm verify
+pnpm --filter @pulse/monitor-service build
+pnpm --filter @pulse/monitor-service start
+```
+
+Dans un autre terminal, `curl -fsS http://localhost:3000/health` doit renvoyer
+`{"status":"ok"}`. `pnpm verify` exécute Vitest, ESLint et Prettier.
+
+Pour la même vérification avec Docker, depuis la racine du dépôt :
+
+```bash
+docker build -f apps/monitor-service/Dockerfile -t pulse-monitor:local .
+docker run --rm -p 127.0.0.1:3000:3000 pulse-monitor:local
+```
+
+Arrêter le service local avant de lancer Docker pour libérer le port 3000.
+Ce TP ne nécessite ni registry ni cluster Kubernetes.
+
+### TP 01 — Démontrer une CI bloquante
+
+L’adaptation Pulse utilise un service TypeScript : Vitest remplace les outils
+de test Rental, ESLint et Prettier remplacent Checkstyle et Ruff, et
+`pnpm verify` reproduit les portes locales sans Docker ni Gitleaks.
+
+[Monitor CI](.github/workflows/monitor-ci.yaml) et le workflow dédié
+[Secrets](.github/workflows/secret-detection.yaml) tournent sur les PR vers
+`main` et les pushes sur `main`. **Image Docker** attend **Tests** et
+**Qualité**, sans publier l’image. Les workflows n’utilisent pas de filtre
+`paths` : un workflow ignoré par ce filtre peut laisser un contrôle obligatoire
+en attente et empêcher la fusion.
+
+Les artefacts `monitor-junit`, `monitor-quality` (ESLint JSON et journal
+Prettier) et `monitor-gitleaks` sont disponibles dans **Actions → exécution →
+Artifacts** pendant 14 jours, y compris en cas d’échec si l’outil a produit son
+rapport.
+
+Les quatre jobs ciblent le runner GitHub Actions auto-hébergé
+`[self-hosted, linux, x64, homeserver]`. Le compte du runner doit avoir accès à
+Docker. Les jobs indépendants s’exécutent l’un après l’autre si un seul runner
+est disponible.
+
+Ne pas exécuter de PR non fiables sur le serveur personnel : les tests et le
+Dockerfile exécutent du code de la PR. Pour accepter des contributions non
+fiables, utiliser un runner hébergé par GitHub ou un runner isolé et éphémère.
+
+1. Ouvrir une PR en brouillon depuis `tp/01-ci` vers `main` et y expliquer
+   l’adaptation à Pulse. Après une première exécution verte et validation de
+   l’enseignant, exiger une PR et les quatre contrôles **Tests**, **Qualité**,
+   **Image Docker** et **Secret detection** dans la protection de `main`.
+   Désactiver le contournement de la règle pour les personnes qui font la démo.
+2. Sur la PR du TP, changer temporairement le `200` attendu dans le test
+   de `/health` en `201`, puis pousser ce commit. Vérifier que **Tests** échoue,
+   qu’**Image Docker** est ignoré et que GitHub bloque la fusion une fois la
+   PR sortie du brouillon.
+3. Télécharger `monitor-junit`, relever l’assertion en échec, puis noter le
+   délai entre le push et le résultat visible. Conserver le lien de l’exécution.
+4. Rétablir `200` dans un commit distinct et vérifier que les quatre contrôles
+   repassent au vert et que la PR devient fusionnable. Conserver le lien de
+   cette exécution et la branche `tp/01-ci`.
+5. Sur une branche jetable, utiliser uniquement la valeur factice fournie par
+   l’enseignant. Ouvrir une PR sans la fusionner, constater l’échec de
+   **Secret detection**, puis fermer la PR et supprimer la branche selon les
+   consignes de l’enseignant.
+
+Supprimer une ligne retire la valeur de la version courante, pas des anciens
+commits. Révoquer un vrai secret le rend inutilisable, même s’il circule encore.
+Réécrire l’historique retire la valeur des références réécrites, mais ne
+révoque pas le secret et n’efface pas les copies existantes.
+
 ## 1. Présentation du projet
 
 ### 1.1 Contexte
