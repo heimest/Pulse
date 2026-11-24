@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build Pulse images into the Minikube Docker daemon (no external registry required).
+# Build Pulse images into the Minikube node runtime (works with containerd).
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -16,15 +16,17 @@ if ! minikube status >/dev/null 2>&1; then
   exit 1
 fi
 
-echo "Pointing Docker CLI at the Minikube daemon..."
-eval "$(minikube docker-env)"
+echo "Building ${MONITOR_IMAGE} inside Minikube..."
+minikube image build \
+  -t "${MONITOR_IMAGE}" \
+  -f "${ROOT_DIR}/apps/monitor-service/Dockerfile" \
+  "${ROOT_DIR}"
 
-echo "Building ${MONITOR_IMAGE}..."
-docker build -f "${ROOT_DIR}/apps/monitor-service/Dockerfile" -t "${MONITOR_IMAGE}" "${ROOT_DIR}"
+echo "Building ${CHECKER_IMAGE} inside Minikube..."
+minikube image build \
+  -t "${CHECKER_IMAGE}" \
+  -f "${ROOT_DIR}/apps/checker-service/Dockerfile" \
+  "${ROOT_DIR}"
 
-echo "Building ${CHECKER_IMAGE}..."
-docker build -f "${ROOT_DIR}/apps/checker-service/Dockerfile" -t "${CHECKER_IMAGE}" "${ROOT_DIR}"
-
-echo "Images available in Minikube:"
-docker images --format 'table {{.Repository}}:{{.Tag}}\t{{.ID}}\t{{.Size}}' \
-  | awk 'NR==1 || /pulse\/(monitor|checker)-service/'
+echo "Images loaded in Minikube:"
+minikube image ls | awk '/pulse\/(monitor|checker)-service/ || NR==0 {print}'
