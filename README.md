@@ -35,13 +35,13 @@ docker compose up --build
 
 - Monitor : `http://127.0.0.1:3000`
 - Checker : `http://127.0.0.1:3001`
-- Postgres : `postgres://pulse:pulse@127.0.0.1:5432/pulse`
+- Postgres (hôte) : `postgres://pulse:pulse@127.0.0.1:5433/pulse`
 
 ### Services Node locaux avec Postgres
 
 ```bash
 docker compose up -d postgres
-export DATABASE_URL=postgres://pulse:pulse@127.0.0.1:5432/pulse
+export DATABASE_URL=postgres://pulse:pulse@127.0.0.1:5433/pulse
 pnpm --filter @pulse/monitor-service dev
 ```
 
