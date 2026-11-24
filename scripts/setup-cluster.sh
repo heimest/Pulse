@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Bootstrap Minikube + Istio (demo profile) + observability addons for Pulse.
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -29,17 +30,20 @@ fi
 echo "Starting Minikube (${MINIKUBE_CPUS} CPUs, ${MINIKUBE_MEMORY}Mi)..."
 minikube start --cpus="${MINIKUBE_CPUS}" --memory="${MINIKUBE_MEMORY}" --driver=docker
 
-if ! command -v istioctl >/dev/null 2>&1; then
-  echo "Installing Istio ${ISTIO_VERSION} locally..."
-  TMP_DIR="$(mktemp -d)"
+ISTIO_HOME=""
+if command -v istioctl >/dev/null 2>&1; then
+  ISTIO_BIN="$(command -v istioctl)"
+  ISTIO_HOME="$(cd "$(dirname "${ISTIO_BIN}")/.." && pwd)"
+else
+  echo "Installing Istio ${ISTIO_VERSION} under ${ROOT_DIR}/.tools ..."
+  TOOLS_DIR="${ROOT_DIR}/.tools"
+  mkdir -p "${TOOLS_DIR}"
   (
-    cd "${TMP_DIR}"
+    cd "${TOOLS_DIR}"
     curl -fsSL "https://istio.io/downloadIstio" | ISTIO_VERSION="${ISTIO_VERSION}" sh -
   )
-  export PATH="${TMP_DIR}/istio-${ISTIO_VERSION}/bin:${PATH}"
-  ISTIO_HOME="${TMP_DIR}/istio-${ISTIO_VERSION}"
-else
-  ISTIO_HOME="$(dirname "$(dirname "$(command -v istioctl)")")"
+  ISTIO_HOME="${TOOLS_DIR}/istio-${ISTIO_VERSION}"
+  export PATH="${ISTIO_HOME}/bin:${PATH}"
 fi
 
 echo "Installing Istio demo profile..."
@@ -56,9 +60,9 @@ else
   echo "Istio addons directory not found at ${ADDONS_DIR}; skip addons install" >&2
 fi
 
-echo "Applying Pulse Postgres ConfigMap and Secret..."
-kubectl apply -f "${ROOT_DIR}/infra/k8s/configmap.yaml"
-kubectl apply -f "${ROOT_DIR}/infra/k8s/secret.yaml"
-
 echo "Cluster bootstrap complete."
-echo "Point Docker at Minikube with: eval \$(minikube docker-env)"
+echo "Next steps:"
+echo "  1. ./scripts/build-images.sh"
+echo "  2. ./scripts/deploy-mesh.sh"
+echo "  3. ./scripts/ingress-forward.sh   # leave running"
+echo "  4. ./scripts/smoke-mesh.sh"
