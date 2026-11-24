@@ -1,5 +1,6 @@
 # Pedagogical circuit breaker for monitor-service.
 # Replaces the monitor-service-mtls DestinationRule while preserving ISTIO_MUTUAL.
+# maxConnections: 0 refuses new TCP connections so callers observe failures.
 # Apply:   kubectl apply -f infra/k8s/circuit-breaker.yaml
 # Restore: kubectl apply -f infra/k8s/enforce-mtls.yaml
 ---
@@ -20,6 +21,3 @@ spec:
       tcp:
         maxConnections: 0
         connectTimeout: 1ms
-        tcpKeepalive:
-          time: 0s
-          interval: 0s
