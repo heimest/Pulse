@@ -1,0 +1,25 @@
+# Pedagogical circuit breaker for monitor-service.
+# Replaces the monitor-service-mtls DestinationRule while preserving ISTIO_MUTUAL.
+# Apply:   kubectl apply -f infra/k8s/circuit-breaker.yaml
+# Restore: kubectl apply -f infra/k8s/enforce-mtls.yaml
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: monitor-service-mtls
+  namespace: default
+  labels:
+    app: monitor-service
+    app.kubernetes.io/part-of: pulse
+spec:
+  host: monitor-service.default.svc.cluster.local
+  trafficPolicy:
+    tls:
+      mode: ISTIO_MUTUAL
+    connectionPool:
+      tcp:
+        maxConnections: 0
+        connectTimeout: 1ms
+        tcpKeepalive:
+          time: 0s
+          interval: 0s
