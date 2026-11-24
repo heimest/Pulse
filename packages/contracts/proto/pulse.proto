@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package pulse;
+
+// Checker exposes CheckService; Monitor calls it for on-demand and streamed checks.
+service CheckService {
+  rpc CheckOnce(CheckRequest) returns (CheckResult) {}
+  rpc RunChecks(stream CheckRequest) returns (stream CheckResult) {}
+}
+
+message CheckRequest {
+  string monitor_id = 1;
+  string url = 2;
+}
+
+message CheckResult {
+  string monitor_id = 1;
+  string status = 2;
+  int32 http_status_code = 3;
+  int32 response_time_ms = 4;
+  string error_message = 5;
+}

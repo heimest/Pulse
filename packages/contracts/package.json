@@ -1,0 +1,5 @@
+{
+  "name": "@pulse/contracts",
+  "private": true,
+  "description": "Shared Pulse API contracts (Protobuf)"
+}

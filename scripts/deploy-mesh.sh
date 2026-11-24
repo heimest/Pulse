@@ -32,6 +32,8 @@ fi
 echo "Waiting for application Deployments..."
 kubectl wait --for=condition=available --timeout=180s deployment/monitor-service
 kubectl wait --for=condition=available --timeout=180s deployment/checker-service
+kubectl wait --for=condition=available --timeout=180s deployment/composition-service
+kubectl wait --for=condition=available --timeout=180s deployment/frontend
 
 echo "Mesh deploy complete."
 kubectl get pods,svc,gateway,virtualservice,destinationrule,peerauthentication -l app.kubernetes.io/part-of=pulse

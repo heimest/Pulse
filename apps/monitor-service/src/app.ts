@@ -1,10 +1,13 @@
 import Fastify from "fastify";
 import type { MonitorStore } from "./domain/types.js";
+import type { CheckGrpcClient } from "./grpc/check-client.js";
 import { registerMonitorRoutes } from "./routes/monitors.js";
+import { registerSagaRoutes } from "./routes/saga.js";
 import { createMemoryStore } from "./store/memory.js";
 
 export interface BuildAppOptions {
   store?: MonitorStore;
+  checker?: CheckGrpcClient;
 }
 
 export function buildApp(options: BuildAppOptions = {}) {
@@ -28,9 +31,13 @@ export function buildApp(options: BuildAppOptions = {}) {
   });
 
   registerMonitorRoutes(app, store);
+  if (options.checker) {
+    registerSagaRoutes(app, store, options.checker);
+  }
 
   app.addHook("onClose", async () => {
     await store.close();
+    options.checker?.close();
   });
 
   return app;

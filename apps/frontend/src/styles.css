@@ -1,0 +1,164 @@
+:root {
+  --bg: #0f1c17;
+  --bg-accent: #1b3329;
+  --ink: #edf3ef;
+  --muted: #9bb0a5;
+  --line: #2c463a;
+  --ok: #3dba7a;
+  --down: #e06b5a;
+  --unknown: #c2a35a;
+  --brand: #8fd6b0;
+  font-family: "IBM Plex Sans", sans-serif;
+  color: var(--ink);
+  background:
+    radial-gradient(circle at top left, #234536 0%, transparent 42%),
+    linear-gradient(160deg, var(--bg), #13231c 55%, #0c1612);
+  min-height: 100%;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+}
+
+.page {
+  width: min(920px, calc(100% - 2rem));
+  margin: 0 auto;
+  padding: 3rem 0 4rem;
+}
+
+.hero {
+  margin-bottom: 2.5rem;
+}
+
+.brand {
+  font-family: "IBM Plex Serif", serif;
+  font-size: clamp(2.5rem, 6vw, 4rem);
+  font-weight: 600;
+  color: var(--brand);
+  margin: 0 0 0.5rem;
+  letter-spacing: -0.03em;
+}
+
+.hero h1 {
+  margin: 0;
+  font-size: clamp(1.4rem, 3vw, 2rem);
+  font-weight: 500;
+}
+
+.lede {
+  margin: 0.75rem 0 0;
+  color: var(--muted);
+  max-width: 36rem;
+}
+
+.create {
+  display: grid;
+  gap: 0.85rem;
+  grid-template-columns: 1fr 1.4fr auto;
+  align-items: end;
+  margin-bottom: 1.5rem;
+}
+
+label {
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+input {
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--ink);
+  border-radius: 0.4rem;
+  padding: 0.7rem 0.8rem;
+  font: inherit;
+}
+
+button {
+  border: 0;
+  border-radius: 0.4rem;
+  background: var(--brand);
+  color: #102019;
+  font: inherit;
+  font-weight: 600;
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+}
+
+button.danger {
+  background: transparent;
+  color: var(--down);
+  border: 1px solid color-mix(in srgb, var(--down) 50%, transparent);
+}
+
+.list {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.monitor {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--line);
+  border-radius: 0.6rem;
+  background: color-mix(in srgb, var(--bg-accent) 70%, transparent);
+}
+
+.monitor h2 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.url {
+  margin: 0.25rem 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  word-break: break-all;
+}
+
+.status {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.status-up {
+  color: var(--ok);
+}
+
+.status-down {
+  color: var(--down);
+}
+
+.status-unknown {
+  color: var(--unknown);
+}
+
+.error {
+  color: var(--down);
+}
+
+.muted {
+  color: var(--muted);
+}
+
+@media (max-width: 720px) {
+  .create {
+    grid-template-columns: 1fr;
+  }
+
+  .monitor {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

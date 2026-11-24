@@ -38,6 +38,8 @@ spec:
                 secretKeyRef:
                   name: pulse-postgres-secret
                   key: DATABASE_URL
+            - name: CHECKER_GRPC_URL
+              value: checker-service.default.svc.cluster.local:50051
           livenessProbe:
             httpGet:
               path: /health/live
@@ -127,10 +129,14 @@ spec:
           ports:
             - name: http
               containerPort: 3001
+            - name: grpc
+              containerPort: 50051
           env:
             - name: PORT
               value: "3001"
-            # In-cluster DNS: Service port 80 maps to container 3000.
+            - name: GRPC_PORT
+              value: "50051"
+            # In-cluster DNS: Service port 80 maps to container HTTP port.
             - name: MONITOR_SERVICE_URL
               value: http://monitor-service.default.svc.cluster.local
             - name: CHECK_INTERVAL_MS
@@ -171,6 +177,10 @@ spec:
       port: 80
       targetPort: http
       protocol: TCP
+    - name: grpc
+      port: 50051
+      targetPort: grpc
+      protocol: TCP
 ---
 # Gateway path: /checker-service/* → checker-service:80 (strip prefix).
 apiVersion: networking.istio.io/v1alpha3
@@ -194,5 +204,179 @@ spec:
       route:
         - destination:
             host: checker-service.default.svc.cluster.local
+            port:
+              number: 80
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: composition-service
+  labels:
+    app: composition-service
+    version: "1.0"
+    app.kubernetes.io/part-of: pulse
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: composition-service
+  template:
+    metadata:
+      labels:
+        app: composition-service
+        version: "1.0"
+        app.kubernetes.io/part-of: pulse
+    spec:
+      containers:
+        - name: composition-service
+          image: pulse/composition-service:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 3002
+          env:
+            - name: PORT
+              value: "3002"
+            - name: MONITOR_SERVICE_URL
+              value: http://monitor-service.default.svc.cluster.local
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: composition-service
+  labels:
+    app: composition-service
+    app.kubernetes.io/part-of: pulse
+spec:
+  type: ClusterIP
+  selector:
+    app: composition-service
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: composition-service
+  labels:
+    app: composition-service
+    app.kubernetes.io/part-of: pulse
+spec:
+  hosts:
+    - "*"
+  gateways:
+    - pulse-gateway
+  http:
+    - match:
+        - uri:
+            prefix: /composition/
+      rewrite:
+        uri: /
+      route:
+        - destination:
+            host: composition-service.default.svc.cluster.local
+            port:
+              number: 80
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  labels:
+    app: frontend
+    version: "1.0"
+    app.kubernetes.io/part-of: pulse
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+        version: "1.0"
+        app.kubernetes.io/part-of: pulse
+    spec:
+      containers:
+        - name: frontend
+          image: pulse/frontend:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 80
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 25m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  labels:
+    app: frontend
+    app.kubernetes.io/part-of: pulse
+spec:
+  type: ClusterIP
+  selector:
+    app: frontend
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
+---
+# Catch-all UI route; more specific /monitor-service and /composition prefixes win.
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: frontend
+  labels:
+    app: frontend
+    app.kubernetes.io/part-of: pulse
+spec:
+  hosts:
+    - "*"
+  gateways:
+    - pulse-gateway
+  http:
+    - match:
+        - uri:
+            prefix: /
+      route:
+        - destination:
+            host: frontend.default.svc.cluster.local
             port:
               number: 80
