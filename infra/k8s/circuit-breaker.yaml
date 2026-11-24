@@ -1,23 +1,34 @@
-# Pedagogical circuit breaker for monitor-service.
-# Replaces the monitor-service-mtls DestinationRule while preserving ISTIO_MUTUAL.
-# maxConnections: 0 refuses new TCP connections so callers observe failures.
+# Pedagogical "open circuit" demo for monitor-service via Istio fault injection.
+# Replaces the monitor-service VirtualService with a 100% HTTP 503 abort.
+# (Istio 1.24 treats connectionPool maxConnections: 0 as unlimited, unlike older demos.)
 # Apply:   kubectl apply -f infra/k8s/circuit-breaker.yaml
-# Restore: kubectl apply -f infra/k8s/enforce-mtls.yaml
+# Restore: kubectl apply -f infra/k8s/microservices.yaml
 ---
 apiVersion: networking.istio.io/v1alpha3
-kind: DestinationRule
+kind: VirtualService
 metadata:
-  name: monitor-service-mtls
-  namespace: default
+  name: monitor-service
   labels:
     app: monitor-service
     app.kubernetes.io/part-of: pulse
 spec:
-  host: monitor-service.default.svc.cluster.local
-  trafficPolicy:
-    tls:
-      mode: ISTIO_MUTUAL
-    connectionPool:
-      tcp:
-        maxConnections: 0
-        connectTimeout: 1ms
+  hosts:
+    - "*"
+  gateways:
+    - pulse-gateway
+  http:
+    - fault:
+        abort:
+          percentage:
+            value: 100
+          httpStatus: 503
+      match:
+        - uri:
+            prefix: /monitor-service/
+      rewrite:
+        uri: /
+      route:
+        - destination:
+            host: monitor-service.default.svc.cluster.local
+            port:
+              number: 80

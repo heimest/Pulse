@@ -81,12 +81,12 @@ Accès via la gateway Istio :
 Manifests : `infra/k8s/infrastructure.yaml`, `microservices.yaml`,
 `enforce-mtls.yaml`, `circuit-breaker.yaml`.
 
-**Circuit breaker (démo)** — refuse les connexions vers Monitor, puis restauration :
+**Circuit breaker (démo)** — abort 503 sur Monitor via la gateway, puis restauration :
 
 ```bash
 kubectl apply -f infra/k8s/circuit-breaker.yaml
 curl -v http://127.0.0.1:31380/monitor-service/health
-kubectl apply -f infra/k8s/enforce-mtls.yaml
+kubectl apply -f infra/k8s/microservices.yaml
 ```
 
 **Observabilité (addons Istio)** :
