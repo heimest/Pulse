@@ -40,3 +40,31 @@ spec:
   trafficPolicy:
     tls:
       mode: ISTIO_MUTUAL
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: composition-service-mtls
+  namespace: default
+  labels:
+    app: composition-service
+    app.kubernetes.io/part-of: pulse
+spec:
+  host: composition-service.default.svc.cluster.local
+  trafficPolicy:
+    tls:
+      mode: ISTIO_MUTUAL
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: frontend-mtls
+  namespace: default
+  labels:
+    app: frontend
+    app.kubernetes.io/part-of: pulse
+spec:
+  host: frontend.default.svc.cluster.local
+  trafficPolicy:
+    tls:
+      mode: ISTIO_MUTUAL

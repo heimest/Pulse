@@ -3,8 +3,13 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-MONITOR_IMAGE="${MONITOR_IMAGE:-pulse/monitor-service:local}"
-CHECKER_IMAGE="${CHECKER_IMAGE:-pulse/checker-service:local}"
+
+IMAGES=(
+  "pulse/monitor-service:local|apps/monitor-service/Dockerfile"
+  "pulse/checker-service:local|apps/checker-service/Dockerfile"
+  "pulse/composition-service:local|apps/composition-service/Dockerfile"
+  "pulse/frontend:local|apps/frontend/Dockerfile"
+)
 
 if ! command -v minikube >/dev/null 2>&1; then
   echo "minikube is required" >&2
@@ -16,21 +21,21 @@ if ! minikube status >/dev/null 2>&1; then
   exit 1
 fi
 
-echo "Building ${MONITOR_IMAGE} inside Minikube..."
-minikube image build \
-  -t "${MONITOR_IMAGE}" \
-  -f "${ROOT_DIR}/apps/monitor-service/Dockerfile" \
-  "${ROOT_DIR}"
-
-echo "Building ${CHECKER_IMAGE} inside Minikube..."
-minikube image build \
-  -t "${CHECKER_IMAGE}" \
-  -f "${ROOT_DIR}/apps/checker-service/Dockerfile" \
-  "${ROOT_DIR}"
+for entry in "${IMAGES[@]}"; do
+  image="${entry%%|*}"
+  dockerfile="${entry##*|}"
+  echo "Building ${image} inside Minikube..."
+  minikube image build \
+    -t "${image}" \
+    -f "${ROOT_DIR}/${dockerfile}" \
+    "${ROOT_DIR}"
+done
 
 echo "Verifying images in Minikube..."
-IMAGES="$(minikube image ls)"
-echo "${IMAGES}" | grep -q 'pulse/monitor-service:local'
-echo "${IMAGES}" | grep -q 'pulse/checker-service:local'
-echo "${IMAGES}" | grep 'pulse/'
+LOADED="$(minikube image ls)"
+for entry in "${IMAGES[@]}"; do
+  image="${entry%%|*}"
+  echo "${LOADED}" | grep -q "${image}"
+done
+echo "${LOADED}" | grep 'pulse/'
 echo "Images ready."

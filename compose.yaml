@@ -22,11 +22,14 @@ services:
     environment:
       PORT: "3000"
       DATABASE_URL: postgres://pulse:pulse@postgres:5432/pulse
+      CHECKER_GRPC_URL: checker-service:50051
     ports:
       - "3000:3000"
     depends_on:
       postgres:
         condition: service_healthy
+      checker-service:
+        condition: service_started
 
   checker-service:
     build:
@@ -34,11 +37,35 @@ services:
       dockerfile: apps/checker-service/Dockerfile
     environment:
       PORT: "3001"
+      GRPC_PORT: "50051"
       MONITOR_SERVICE_URL: http://monitor-service:3000
       CHECK_INTERVAL_MS: "30000"
     ports:
       - "3001:3001"
+      - "50051:50051"
     depends_on:
+      - postgres
+
+  composition-service:
+    build:
+      context: .
+      dockerfile: apps/composition-service/Dockerfile
+    environment:
+      PORT: "3002"
+      MONITOR_SERVICE_URL: http://monitor-service:3000
+    ports:
+      - "3002:3002"
+    depends_on:
+      - monitor-service
+
+  frontend:
+    build:
+      context: .
+      dockerfile: apps/frontend/Dockerfile
+    ports:
+      - "8080:80"
+    depends_on:
+      - composition-service
       - monitor-service
 
 volumes:
