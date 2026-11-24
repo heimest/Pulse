@@ -7,29 +7,68 @@
 
 ---
 
-## Démarrage local — socle du TP 01 DevOps
+## Démarrage local
 
 Prérequis : Node.js 24 et pnpm 12.11.2 (la version indiquée dans `package.json`).
 
 ```bash
 pnpm install --frozen-lockfile
 pnpm verify
+```
+
+### Monitor Service (mémoire)
+
+Sans `DATABASE_URL`, le Monitor Service stocke les moniteurs en mémoire.
+
+```bash
 pnpm --filter @pulse/monitor-service build
 pnpm --filter @pulse/monitor-service start
 ```
 
-Dans un autre terminal, `curl -fsS http://localhost:3000/health` doit renvoyer
-`{"status":"ok"}`. `pnpm verify` exécute Vitest, ESLint et Prettier.
+Santé : `curl -fsS http://127.0.0.1:3000/health` → `{"status":"ok"}`.
 
-Pour la même vérification avec Docker, depuis la racine du dépôt :
+### Stack Docker Compose (Postgres + Monitor + Checker)
 
 ```bash
-docker build -f apps/monitor-service/Dockerfile -t pulse-monitor:local .
-docker run --rm -p 127.0.0.1:3000:3000 pulse-monitor:local
+docker compose up --build
 ```
 
-Arrêter le service local avant de lancer Docker pour libérer le port 3000.
-Ce TP ne nécessite ni registry ni cluster Kubernetes.
+- Monitor : `http://127.0.0.1:3000`
+- Checker : `http://127.0.0.1:3001`
+- Postgres : `postgres://pulse:pulse@127.0.0.1:5432/pulse`
+
+### Services Node locaux avec Postgres
+
+```bash
+docker compose up -d postgres
+export DATABASE_URL=postgres://pulse:pulse@127.0.0.1:5432/pulse
+pnpm --filter @pulse/monitor-service dev
+```
+
+Dans un autre terminal :
+
+```bash
+export MONITOR_SERVICE_URL=http://127.0.0.1:3000
+export CHECK_INTERVAL_MS=15000
+pnpm --filter @pulse/checker-service dev
+```
+
+Le Checker interroge périodiquement le Monitor, vérifie chaque URL, puis
+enregistre le résultat via `POST /monitors/:id/checks`. Un passage manuel est
+possible avec `curl -fsS -X POST http://127.0.0.1:3001/checks/run`.
+
+### Cluster Minikube / Istio
+
+```bash
+chmod +x scripts/setup-cluster.sh
+./scripts/setup-cluster.sh
+```
+
+Le script démarre Minikube, installe Istio (profil demo), active l’injection de
+sidecars, pose les addons (Kiali, Grafana, Prometheus, Jaeger) et applique
+`infra/k8s/configmap.yaml` ainsi que `infra/k8s/secret.yaml`.
+
+`pnpm verify` exécute Vitest, ESLint et Prettier.
 
 ### TP 01 — Démontrer une CI bloquante
 
@@ -289,13 +328,13 @@ Le projet sera hébergé dans un monorepo Git.
 ```text
 pulse/
 ├── apps/
-│   ├── frontend/
+│   ├── frontend/            # prévu
 │   ├── monitor-service/
 │   └── checker-service/
 ├── infra/
-│   ├── docker/
-│   └── kubernetes/
+│   └── k8s/
 ├── scripts/
+│   └── setup-cluster.sh
 ├── .github/
 │   └── workflows/
 ├── compose.yaml
