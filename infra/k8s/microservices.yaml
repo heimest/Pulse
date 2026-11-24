@@ -1,0 +1,198 @@
+# Pulse application workloads on the Istio mesh.
+# Images are expected in the Minikube Docker daemon (see scripts/build-images.sh):
+#   pulse/monitor-service:local
+#   pulse/checker-service:local
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: monitor-service
+  labels:
+    app: monitor-service
+    version: "1.0"
+    app.kubernetes.io/part-of: pulse
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: monitor-service
+  template:
+    metadata:
+      labels:
+        app: monitor-service
+        version: "1.0"
+        app.kubernetes.io/part-of: pulse
+    spec:
+      containers:
+        - name: monitor-service
+          image: pulse/monitor-service:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 3000
+          env:
+            - name: PORT
+              value: "3000"
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: pulse-postgres-secret
+                  key: DATABASE_URL
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: monitor-service
+  labels:
+    app: monitor-service
+    app.kubernetes.io/part-of: pulse
+spec:
+  type: ClusterIP
+  selector:
+    app: monitor-service
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
+---
+# Gateway path: /monitor-service/* → monitor-service:80 (strip prefix).
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: monitor-service
+  labels:
+    app: monitor-service
+    app.kubernetes.io/part-of: pulse
+spec:
+  hosts:
+    - "*"
+  gateways:
+    - pulse-gateway
+  http:
+    - match:
+        - uri:
+            prefix: /monitor-service/
+      rewrite:
+        uri: /
+      route:
+        - destination:
+            host: monitor-service.default.svc.cluster.local
+            port:
+              number: 80
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: checker-service
+  labels:
+    app: checker-service
+    version: "1.0"
+    app.kubernetes.io/part-of: pulse
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: checker-service
+  template:
+    metadata:
+      labels:
+        app: checker-service
+        version: "1.0"
+        app.kubernetes.io/part-of: pulse
+    spec:
+      containers:
+        - name: checker-service
+          image: pulse/checker-service:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 3001
+          env:
+            - name: PORT
+              value: "3001"
+            # In-cluster DNS: Service port 80 maps to container 3000.
+            - name: MONITOR_SERVICE_URL
+              value: http://monitor-service.default.svc.cluster.local
+            - name: CHECK_INTERVAL_MS
+              value: "30000"
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: checker-service
+  labels:
+    app: checker-service
+    app.kubernetes.io/part-of: pulse
+spec:
+  type: ClusterIP
+  selector:
+    app: checker-service
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
+---
+# Gateway path: /checker-service/* → checker-service:80 (strip prefix).
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: checker-service
+  labels:
+    app: checker-service
+    app.kubernetes.io/part-of: pulse
+spec:
+  hosts:
+    - "*"
+  gateways:
+    - pulse-gateway
+  http:
+    - match:
+        - uri:
+            prefix: /checker-service/
+      rewrite:
+        uri: /
+      route:
+        - destination:
+            host: checker-service.default.svc.cluster.local
+            port:
+              number: 80
