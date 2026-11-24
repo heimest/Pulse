@@ -1,0 +1,99 @@
+# Pulse infrastructure: PostgreSQL + Istio ingress Gateway.
+# Apply after scripts/setup-cluster.sh (Istio installed, istio-injection enabled).
+# Postgres skips sidecar injection: the database is not part of the application mesh.
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  labels:
+    app: postgres
+    version: "1.0"
+    app.kubernetes.io/part-of: pulse
+  annotations:
+    sidecar.istio.io/inject: "false"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+        version: "1.0"
+        app.kubernetes.io/part-of: pulse
+      annotations:
+        sidecar.istio.io/inject: "false"
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: postgres
+              containerPort: 5432
+          envFrom:
+            - secretRef:
+                name: pulse-postgres-secret
+            - configMapRef:
+                name: pulse-postgres-config
+          # Official image ignores unknown env keys (e.g. DATABASE_URL from the Secret).
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "pulse", "-d", "pulse"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-U", "pulse", "-d", "pulse"]
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+      volumes:
+        - name: postgres-data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  labels:
+    app: postgres
+    app.kubernetes.io/part-of: pulse
+spec:
+  type: ClusterIP
+  selector:
+    app: postgres
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: postgres
+      protocol: TCP
+---
+# Single HTTP entry point for mesh traffic (VirtualServices attach to this Gateway).
+apiVersion: networking.istio.io/v1alpha3
+kind: Gateway
+metadata:
+  name: pulse-gateway
+  labels:
+    app.kubernetes.io/part-of: pulse
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+    - port:
+        number: 80
+        name: http
+        protocol: HTTP
+      hosts:
+        - "*"

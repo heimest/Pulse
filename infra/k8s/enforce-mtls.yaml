@@ -1,0 +1,42 @@
+# Strict mTLS for Pulse workloads (modern Istio APIs).
+# PeerAuthentication rejects plain-text peer traffic in the namespace.
+# DestinationRules tell sidecars to originate ISTIO_MUTUAL TLS to these hosts.
+---
+apiVersion: security.istio.io/v1
+kind: PeerAuthentication
+metadata:
+  name: pulse-strict-mtls
+  namespace: default
+  labels:
+    app.kubernetes.io/part-of: pulse
+spec:
+  mtls:
+    mode: STRICT
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: monitor-service-mtls
+  namespace: default
+  labels:
+    app: monitor-service
+    app.kubernetes.io/part-of: pulse
+spec:
+  host: monitor-service.default.svc.cluster.local
+  trafficPolicy:
+    tls:
+      mode: ISTIO_MUTUAL
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: checker-service-mtls
+  namespace: default
+  labels:
+    app: checker-service
+    app.kubernetes.io/part-of: pulse
+spec:
+  host: checker-service.default.svc.cluster.local
+  trafficPolicy:
+    tls:
+      mode: ISTIO_MUTUAL

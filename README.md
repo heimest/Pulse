@@ -57,16 +57,60 @@ Le Checker interroge périodiquement le Monitor, vérifie chaque URL, puis
 enregistre le résultat via `POST /monitors/:id/checks`. Un passage manuel est
 possible avec `curl -fsS -X POST http://127.0.0.1:3001/checks/run`.
 
-### Cluster Minikube / Istio
+### Service mesh (Minikube + Istio)
+
+Prérequis : Docker Desktop démarré, `minikube`, `kubectl`.
 
 ```bash
-chmod +x scripts/setup-cluster.sh
-./scripts/setup-cluster.sh
+./scripts/setup-cluster.sh    # Minikube, Istio demo, sidecars, addons
+./scripts/build-images.sh     # images dans le daemon Minikube
+./scripts/deploy-mesh.sh      # Postgres, Gateway, services, mTLS
+./scripts/ingress-forward.sh  # laisser tourner → localhost:31380
+./scripts/smoke-mesh.sh       # autre terminal
 ```
 
-Le script démarre Minikube, installe Istio (profil demo), active l’injection de
-sidecars, pose les addons (Kiali, Grafana, Prometheus, Jaeger) et applique
-`infra/k8s/configmap.yaml` ainsi que `infra/k8s/secret.yaml`.
+Accès via la gateway Istio :
+
+| URL | Service |
+|---|---|
+| `http://127.0.0.1:31380/monitor-service/health` | Monitor |
+| `http://127.0.0.1:31380/monitor-service/monitors` | API moniteurs |
+| `http://127.0.0.1:31380/checker-service/health` | Checker |
+| `http://127.0.0.1:31380/checker-service/checks/run` | Cycle manuel (POST) |
+
+Manifests : `infra/k8s/infrastructure.yaml`, `microservices.yaml`,
+`enforce-mtls.yaml`, `circuit-breaker.yaml`.
+
+**Circuit breaker (démo)** — abort 503 sur Monitor via la gateway, puis restauration :
+
+```bash
+kubectl apply -f infra/k8s/circuit-breaker.yaml
+curl -v http://127.0.0.1:31380/monitor-service/health
+kubectl apply -f infra/k8s/microservices.yaml
+```
+
+**Observabilité (addons Istio)** :
+
+```bash
+kubectl -n istio-system port-forward deployment/kiali 20001:20001
+# http://127.0.0.1:20001/
+
+kubectl -n istio-system port-forward deployment/grafana 3000:3000
+# http://127.0.0.1:3000/
+
+kubectl -n istio-system port-forward svc/tracing 16686:80
+# http://127.0.0.1:16686/
+```
+
+**Scale / restart** :
+
+```bash
+kubectl scale deployment/monitor-service --replicas=2
+kubectl get pods -l app=monitor-service
+kubectl delete pod -l app=monitor-service
+```
+
+Nettoyage applicatif : `./scripts/teardown-mesh.sh` puis `minikube stop`.
 
 `pnpm verify` exécute Vitest, ESLint et Prettier.
 
@@ -334,8 +378,19 @@ pulse/
 │   └── checker-service/
 ├── infra/
 │   └── k8s/
+│       ├── configmap.yaml
+│       ├── secret.yaml
+│       ├── infrastructure.yaml
+│       ├── microservices.yaml
+│       ├── enforce-mtls.yaml
+│       └── circuit-breaker.yaml
 ├── scripts/
-│   └── setup-cluster.sh
+│   ├── setup-cluster.sh
+│   ├── build-images.sh
+│   ├── deploy-mesh.sh
+│   ├── ingress-forward.sh
+│   ├── smoke-mesh.sh
+│   └── teardown-mesh.sh
 ├── .github/
 │   └── workflows/
 ├── compose.yaml
