@@ -28,5 +28,9 @@ minikube image build \
   -f "${ROOT_DIR}/apps/checker-service/Dockerfile" \
   "${ROOT_DIR}"
 
-echo "Images loaded in Minikube:"
-minikube image ls | awk '/pulse\/(monitor|checker)-service/ || NR==0 {print}'
+echo "Verifying images in Minikube..."
+IMAGES="$(minikube image ls)"
+echo "${IMAGES}" | grep -q 'pulse/monitor-service:local'
+echo "${IMAGES}" | grep -q 'pulse/checker-service:local'
+echo "${IMAGES}" | grep 'pulse/'
+echo "Images ready."
