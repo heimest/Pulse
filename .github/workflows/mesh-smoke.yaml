@@ -1,0 +1,68 @@
+name: Mesh smoke
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mesh-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  minikube-smoke:
+    name: Minikube smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Start Minikube
+        uses: medyagh/setup-minikube@latest
+        with:
+          cpus: 2
+          memory: 4000
+
+      - name: Build monitor image in Minikube
+        run: |
+          minikube image build \
+            -t pulse/monitor-service:ci \
+            -f apps/monitor-service/Dockerfile \
+            .
+
+      - name: Deploy CI smoke stack
+        run: kubectl apply -f infra/k8s/ci-smoke.yaml
+
+      - name: Wait for pods
+        run: |
+          kubectl wait --for=condition=available --timeout=180s deployment/postgres
+          kubectl wait --for=condition=available --timeout=180s deployment/monitor-service
+          kubectl get pods
+
+      - name: Exercise monitor API
+        uses: nick-fields/retry@v3
+        with:
+          timeout_seconds: 20
+          max_attempts: 6
+          command: |
+            URL="$(minikube service monitor-service --url)"
+            curl -fsS "${URL}/health"
+            curl -fsS -X POST "${URL}/monitors" \
+              -H 'content-type: application/json' \
+              -d '{"name":"CI","url":"https://example.com","intervalSeconds":30}'
