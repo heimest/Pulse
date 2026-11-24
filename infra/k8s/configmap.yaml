@@ -4,5 +4,6 @@ metadata:
   name: pulse-postgres-config
   labels:
     app: postgres
+    app.kubernetes.io/part-of: pulse
 data:
   POSTGRES_DB: pulse
