@@ -73,13 +73,29 @@ Accès via la gateway Istio :
 
 | URL | Service |
 |---|---|
+| `http://127.0.0.1:31380/` | Frontend Pulse |
 | `http://127.0.0.1:31380/monitor-service/health` | Monitor |
 | `http://127.0.0.1:31380/monitor-service/monitors` | API moniteurs |
+| `http://127.0.0.1:31380/monitor-service/monitors/saga` | Saga create+check (POST) |
 | `http://127.0.0.1:31380/checker-service/health` | Checker |
 | `http://127.0.0.1:31380/checker-service/checks/run` | Cycle manuel (POST) |
+| `http://127.0.0.1:31380/composition/graphql` | GraphQL composition |
 
 Manifests : `infra/k8s/infrastructure.yaml`, `microservices.yaml`,
-`enforce-mtls.yaml`, `circuit-breaker.yaml`.
+`enforce-mtls.yaml`, `circuit-breaker.yaml`, `ci-smoke.yaml`.
+
+### Compléments mesh (gRPC, saga, GraphQL, UI)
+
+- **gRPC** : contrat `packages/contracts/proto/pulse.proto` — le Checker expose
+  `CheckService` (port `50051`), le Monitor l’appelle pour un check à la demande.
+- **Saga** : `POST /monitors/saga` crée un moniteur, lance le premier check via
+  gRPC, enregistre le résultat ; si `DOWN`, compensation par suppression du
+  moniteur (`409`).
+- **GraphQL** : `composition-service` assemble moniteurs + derniers checks
+  (`/composition/graphql`, GraphiQL activé).
+- **Frontend** : dashboard React servi derrière la gateway (`/`).
+- **CI Minikube** : workflow [Mesh smoke](.github/workflows/mesh-smoke.yaml)
+  (build image + `ci-smoke.yaml` + curl santé/API).
 
 **Circuit breaker (démo)** — abort 503 sur Monitor via la gateway, puis restauration :
 
