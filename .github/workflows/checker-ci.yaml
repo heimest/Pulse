@@ -1,0 +1,81 @@
+name: Checker CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: checker-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    name: Tests
+    runs-on: [self-hosted, linux, x64, homeserver]
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @pulse/checker-service test --reporter=default --reporter=junit --outputFile.junit=reports/vitest.xml
+      - uses: actions/upload-artifact@v6
+        if: ${{ always() }}
+        with:
+          name: checker-junit
+          path: apps/checker-service/reports/vitest.xml
+          if-no-files-found: warn
+          retention-days: 14
+
+  quality:
+    name: Qualité
+    runs-on: [self-hosted, linux, x64, homeserver]
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: ESLint
+        run: pnpm lint --format json --output-file reports/eslint-checker.json
+      - name: Prettier
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          mkdir -p reports
+          pnpm format:check 2>&1 | tee reports/prettier-checker.txt
+      - uses: actions/upload-artifact@v6
+        if: ${{ always() }}
+        with:
+          name: checker-quality
+          path: |
+            reports/eslint-checker.json
+            reports/prettier-checker.txt
+          if-no-files-found: warn
+          retention-days: 14
+
+  image:
+    name: Image Docker
+    needs: [tests, quality]
+    runs-on: [self-hosted, linux, x64, homeserver]
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - run: docker build -f apps/checker-service/Dockerfile -t pulse-checker:ci .
