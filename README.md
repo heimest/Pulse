@@ -111,10 +111,11 @@ fiables, utiliser un runner hébergé par GitHub ou un runner isolé et éphém�
 4. Rétablir `200` dans un commit distinct et vérifier que les quatre contrôles
    repassent au vert et que la PR devient fusionnable. Conserver le lien de
    cette exécution et la branche `tp/01-ci`.
-5. Sur une branche jetable, utiliser uniquement la valeur factice fournie par
-   l’enseignant. Ouvrir une PR sans la fusionner, constater l’échec de
-   **Secret detection**, puis fermer la PR et supprimer la branche selon les
-   consignes de l’enseignant.
+5. Sur `tp/01-gitleaks-demo`, utiliser uniquement la valeur factice fournie par
+   l’enseignant. Ouvrir une PR sans la fusionner et constater l’échec de
+   **Secret detection**. La branche et la PR de démo peuvent être conservées :
+   le scan ne porte que sur l’historique de la branche testée, pas sur les
+   autres refs du dépôt.
 
 Supprimer une ligne retire la valeur de la version courante, pas des anciens
 commits. Révoquer un vrai secret le rend inutilisable, même s’il circule encore.
