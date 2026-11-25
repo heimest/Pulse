@@ -128,7 +128,8 @@ kubectl delete pod -l app=monitor-service
 
 Nettoyage applicatif : `./scripts/teardown-mesh.sh` puis `minikube stop`.
 
-`pnpm verify` exécute Vitest, ESLint et Prettier.
+`pnpm verify` exécute Vitest, ESLint, Prettier et la politique locale de
+chaîne logicielle (`pnpm supply-chain-policy`).
 
 ### TP 01 — Démontrer une CI bloquante
 
@@ -136,12 +137,16 @@ L’adaptation Pulse utilise un service TypeScript : Vitest remplace les outils
 de test Rental, ESLint et Prettier remplacent Checkstyle et Ruff, et
 `pnpm verify` reproduit les portes locales sans Docker ni Gitleaks.
 
-[Monitor CI](.github/workflows/monitor-ci.yaml) et le workflow dédié
+Les workflows applicatifs ([Monitor](.github/workflows/monitor-ci.yaml),
+[Checker](.github/workflows/checker-ci.yaml),
+[Composition](.github/workflows/composition-ci.yaml),
+[Frontend](.github/workflows/frontend-ci.yaml)) et
 [Secrets](.github/workflows/secret-detection.yaml) tournent sur les PR vers
-`main` et les pushes sur `main`. **Image Docker** attend **Tests** et
-**Qualité**, sans publier l’image. Les workflows n’utilisent pas de filtre
-`paths` : un workflow ignoré par ce filtre peut laisser un contrôle obligatoire
-en attente et empêcher la fusion.
+`main` et les pushes sur `main`. Sur une PR, **Image Docker** attend **Tests**
+et **Qualité**, construit l’image via Buildx (cache GHA), et ne pousse rien
+vers le registre. Les workflows n’utilisent pas de filtre `paths` : un workflow
+ignoré par ce filtre peut laisser un contrôle obligatoire en attente et
+empêcher la fusion.
 
 Les artefacts `monitor-junit`, `monitor-quality` (ESLint JSON et journal
 Prettier) et `monitor-gitleaks` sont disponibles dans **Actions → exécution →
@@ -181,6 +186,32 @@ Supprimer une ligne retire la valeur de la version courante, pas des anciens
 commits. Révoquer un vrai secret le rend inutilisable, même s’il circule encore.
 Réécrire l’historique retire la valeur des références réécrites, mais ne
 révoque pas le secret et n’efface pas les copies existantes.
+
+### TP 02 — Identité et preuves des images
+
+Les références mutables sont refusées en local et en CI :
+
+- actions GitHub épinglées à un commit SHA (`uses: …@<sha40> # version`) ;
+- images de base Docker épinglées `tag@sha256:…` ;
+- Dependabot pour `github-actions` et `docker` (`.github/dependabot.yml`) ;
+- revue des dépendances sur PR
+  ([Dependency review](.github/workflows/dependency-review.yaml), seuil `high`).
+
+Sur un push vers `main`, chaque pipeline applicatif publie
+`ghcr.io/<owner>/<repo>/<service>` puis, sur **le même digest** Buildx :
+
+1. signature Cosign keyless (OIDC du workflow) ;
+2. SBOM SPDX JSON (artefact 7 jours) ;
+3. attestations de provenance et de SBOM ;
+4. vérification Cosign + `gh attestation verify` ;
+5. scan Trivy SARIF sur ce digest (jamais sur `latest` seul).
+
+Contrôle local :
+
+```bash
+pnpm supply-chain-policy
+pnpm verify
+```
 
 ## 1. Présentation du projet
 
