@@ -26,7 +26,9 @@ function isRegistryImage(fromInstruction) {
     return false;
   }
   // Local stage names have no registry/tag/digest markers.
-  return imageRef.includes("/") || imageRef.includes(":") || imageRef.includes("@");
+  return (
+    imageRef.includes("/") || imageRef.includes(":") || imageRef.includes("@")
+  );
 }
 
 function checkWorkflows() {
@@ -42,10 +44,7 @@ function checkWorkflows() {
       if (!stripped.startsWith("uses:")) {
         return;
       }
-      const reference = stripped
-        .slice("uses:".length)
-        .split("#", 1)[0]
-        .trim();
+      const reference = stripped.slice("uses:".length).split("#", 1)[0].trim();
       if (reference.startsWith("./")) {
         return;
       }
