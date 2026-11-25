@@ -13,6 +13,10 @@ concurrency:
   group: monitor-ci-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  REGISTRY: ghcr.io
+  SERVICE: monitor-service
+
 jobs:
   tests:
     name: Tests
@@ -73,18 +77,132 @@ jobs:
     name: Image Docker
     needs: [tests, quality]
     runs-on: [self-hosted, linux, x64, homeserver]
-    timeout-minutes: 15
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
+      image: ${{ steps.meta.outputs.image }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
+      - name: Image coordinates
+        id: meta
+        shell: bash
+        run: |
+          owner_repo="$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')"
+          image="${{ env.REGISTRY }}/${owner_repo}/${{ env.SERVICE }}"
+          echo "image=${image}" >> "$GITHUB_OUTPUT"
+          {
+            echo "tags<<EOF"
+            echo "${image}:sha-${GITHUB_SHA::12}"
+            if [ "${GITHUB_EVENT_NAME}" = "pull_request" ]; then
+              echo "${image}:pr-${{ github.event.pull_request.number }}"
+            fi
+            if [ "${GITHUB_REF}" = "refs/heads/main" ]; then
+              echo "${image}:latest"
+            fi
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
       - uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
-      - uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+
+      - name: Log in to GHCR
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and optionally push
+        id: build
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
         with:
           context: .
           file: apps/monitor-service/Dockerfile
-          push: false
-          load: true
-          tags: pulse-monitor:ci
+          push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+          load: ${{ !(github.event_name == 'push' && github.ref == 'refs/heads/main') }}
+          tags: ${{ steps.meta.outputs.tags }}
           cache-from: type=gha,scope=monitor-service
           cache-to: type=gha,scope=monitor-service,mode=max
+
+  supply-chain:
+    name: Supply chain
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: image
+    runs-on: [self-hosted, linux, x64, homeserver]
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+      security-events: write
+    steps:
+      - name: Log in to GHCR
+        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@d58896d6a1865668819e1d91763c7751a165e159 # v3.9.2
+
+      - name: Sign image by digest
+        env:
+          IMAGE_REF: ${{ needs.image.outputs.image }}@${{ needs.image.outputs.digest }}
+        run: cosign sign --yes "$IMAGE_REF"
+
+      - name: Generate SPDX SBOM
+        uses: anchore/sbom-action@f8bdd1d8ac5e901a77a92f111440fdb1b593736b # v0.20.6
+        with:
+          image: ${{ needs.image.outputs.image }}@${{ needs.image.outputs.digest }}
+          format: spdx-json
+          output-file: monitor-service.sbom.spdx.json
+          artifact-name: monitor-service-sbom
+          upload-artifact-retention: 7
+
+      - name: Attest build provenance
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: ${{ needs.image.outputs.image }}
+          subject-digest: ${{ needs.image.outputs.digest }}
+          push-to-registry: true
+
+      - name: Attest SBOM
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: ${{ needs.image.outputs.image }}
+          subject-digest: ${{ needs.image.outputs.digest }}
+          sbom-path: monitor-service.sbom.spdx.json
+          push-to-registry: true
+
+      - name: Verify signature and attestations
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          IMAGE_REF: ${{ needs.image.outputs.image }}@${{ needs.image.outputs.digest }}
+          CERTIFICATE_IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/monitor-ci.yaml@refs/heads/main
+        run: |
+          cosign verify \
+            --certificate-identity "$CERTIFICATE_IDENTITY" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            "$IMAGE_REF"
+          gh attestation verify "oci://$IMAGE_REF" --repo "$GITHUB_REPOSITORY"
+
+      - name: Scan published digest with Trivy
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ needs.image.outputs.image }}@${{ needs.image.outputs.digest }}
+          format: sarif
+          output: trivy-monitor.sarif
+
+      - name: Upload Trivy results
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          sarif_file: trivy-monitor.sarif
+          category: trivy-monitor-service
